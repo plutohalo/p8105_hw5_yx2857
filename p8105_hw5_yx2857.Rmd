@@ -37,11 +37,26 @@ scale_fill_discrete = scale_fill_viridis_d
 # Suppose you put 𝑛people in a room, and want to know the probability that at least two people share a birthday. For simplicity, we’ll assume there are no leap years (i.e. there are only 365 days) and that birthdays are uniformly distributed over the year (which is actually not the case).
 
 # Write a function that, for a fixed group size, randomly draws “birthdays” for each person; checks whether there are duplicate birthdays in the group; and returns TRUE or FALSE based on the result.
-
-# Next, run this function 10000 times for each group size between 2 and 50. For each group size, compute the probability that at least two people in the group will share a birthday by averaging across the 10000 simulation runs. Make a plot showing the probability as a function of group size, and comment on your results.
-
+birthday_sim <- function(group_size) {
+  birthdays <- sample(1:365, group_size, replace = TRUE)
+  return(length(birthdays) != length(unique(birthdays)))
+}
 
 ```
+
+```{r}
+# Next, run this function 10000 times for each group size between 2 and 50. For each group size, compute the probability that at least two people in the group will share a birthday by averaging across the 10000 simulation runs. Make a plot showing the probability as a function of group size, and comment on your results.
+group_sizes <- 2:50
+n_sims <- 10000
+shared_birthday_probs <- map_dbl(group_sizes, ~mean(replicate(n_sims, birthday_sim(.x))))
+
+shared_birthday_probs_df <- tibble(group_size = group_sizes, shared_birthday_prob = shared_birthday_probs)
+
+shared_birthday_probs_df |> 
+  ggplot(aes(x = group_size, y = shared_birthday_prob)) + geom_point() + geom_line() + labs(title = "Probability of shared birthday by group size", x = "Group size", y = "Probability of shared birthday")
+```
+The result shows that the probability of at least two people sharing a birthday increases as the group size increases. At a group size of 23 people, there is a 50% chance that two people will share a birthday. As the group size increases, the probability of shared birthdays increases exponentially.   
+
 
 # Problem 2.  
 
@@ -55,19 +70,16 @@ scale_fill_discrete = scale_fill_viridis_d
 
 # Function generate random samples, substracting mean and p-value
 sim_mean_p = function(samp_size = 30, true_mean = 0, true_sd = 5, mu = 0) {
-  
   sim_df = 
     tibble(
       x = rnorm(samp_size, true_mean, true_sd)
     )
-
   s_mean = 
     sim_df |> 
     summarize(
       samp_mean = mean(x),
       p_val = t.test(x, mu = mu)|>broom::tidy()|>pull(p.value)|>round(3)
     )
-  
   return(s_mean)
 }
 
@@ -89,14 +101,12 @@ sim_res_list <- map(mu_values, function(mu) {
   tibble(
     iter = 1:n
   ) |> 
-    mutate(samp_res = map(iter, ~sim_mean_p(samp_size = 30, true_mean = mu, true_sd = 5, mu = mu))) |> 
+    mutate(samp_res = map(iter, ~sim_mean_p(samp_size = 30, true_mean = mu, true_sd = 5, mu = 0))) |> 
     unnest(samp_res)
 })
 
 # Name the list based on mu values
 names(sim_res_list) <- paste0("mu_", mu_values)
-
-
 
 # Combine all results into a single tibble with an additional column for `mu`
 combined_results <- bind_rows(
@@ -113,22 +123,13 @@ combined_results |> group_by(mu) |>
   summarize(power = mean(p_val < 0.05)) |> 
   ggplot(aes(x = mu, y = power)) + geom_point() + geom_line() + labs(title = "Power of the test", x = "True value of mu", y = "Proportion of times the null was rejected")
 ```
-The association between the effect size and power is positive. As the true value of mu increases, the power of the test also increases. This is because the larger the effect size, the more likely the null hypothesis will be rejected.  
+The association between the effect size and power is positive. As μ increases, the true mean is further from the null hypothesis (H0), and larger effect sizes lead to greater separation between the true distribution and the null hypothesis, making it easier to reject.  
 
 ```{r}
 # Make a plot showing the average estimate of 𝜇̂ 
 #  on the y axis and the true value of 𝜇 on the x axis. 
 
 #  Make a second plot (or overlay on the first) the average estimate of 𝜇̂ only in samples for which the null was rejected on the y axis and the true value of 𝜇 on the x axis. Is the sample average of 𝜇̂ across tests for which the null is rejected approximately equal to the true value of 𝜇? Why or why not?
-
-
-combined_results |> group_by(mu) |>
-  summarize(est_mu = mean(samp_mean)) |> 
-  ggplot(aes(x = mu, y = est_mu)) + geom_point() + geom_line() + labs(title = "Average estimate of mu", x = "True value of mu", y = "Average estimate of mu")
-
-combined_results |> filter(p_val < 0.05) |> group_by(mu) |>
-  summarize(est_mu = mean(samp_mean)) |> 
-  ggplot(aes(x = mu, y = est_mu)) + geom_point() + geom_line() + labs(title = "Average estimate of mu in samples for which the null was rejected", x = "True value of mu", y = "Average estimate of mu")
 
 # overlay the second plot on the first plot
 combined_results |> group_by(mu) |>
